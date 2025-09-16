@@ -1,7 +1,5 @@
 <script lang="ts" setup>
-import type { UploadFile } from 'ant-design-vue';
-
-import { h, toRaw } from 'vue';
+import { h } from 'vue';
 
 import { Page } from '@vben/common-ui';
 
@@ -9,7 +7,6 @@ import { Card, message } from 'ant-design-vue';
 import dayjs from 'dayjs';
 
 import { useVbenForm } from '#/adapter/form';
-import { $t } from '#/locales';
 
 const nextThursday = dayjs().add((4 - dayjs().day() + 7) % 7 || 7, 'day');
 
