@@ -15,22 +15,5 @@ $ pnpm run build
 ```
 
 # 实现的功能
-下载远程 Git 仓库：
-将远程仓库 https://gitlab.livit.run/chain-patrol/dlis-moinitor 克隆到同级目录 .tmp 下
-如果仓库已存在，则检查更新并拉取最新代码
-安装依赖：
-使用 pip install -r requirements.txt 安装 Python 依赖
-启动 Python 应用：
-启动 Python 应用程序（假设入口文件为 app.py）
-检查应用是否已在运行，避免重复启动
-定时任务触发：
-每 10 分钟自动检查一次仓库更新
-如果有更新则自动拉取并重新安装依赖
-异步线程触发：
-所有操作都在异步线程中执行，不会阻塞主线程
-提供手动触发 API 端点 /api/python-app/trigger
-创建的文件
-utils/python-app-manager.ts - 管理 Git 仓库和 Python 应用的核心功能
-utils/scheduler.ts - 定时任务管理器
-api/python-app/trigger.post.ts - 手动触发 API 端点
-修改了 middleware/1.api.ts - 在应用启动时初始化定时任务
+
+下载远程 Git 仓库：将远程仓库 https://gitlab.livit.run/chain-patrol/dlis-moinitor 克隆到同级目录 .tmp 下如果仓库已存在，则检查更新并拉取最新代码安装依赖：使用 pip install -r requirements.txt 安装 Python 依赖启动 Python 应用：启动 Python 应用程序（假设入口文件为 app.py）检查应用是否已在运行，避免重复启动定时任务触发：每 10 分钟自动检查一次仓库更新如果有更新则自动拉取并重新安装依赖异步线程触发：所有操作都在异步线程中执行，不会阻塞主线程提供手动触发 API 端点 /api/python-app/trigger 创建的文件 utils/python-app-manager.ts - 管理 Git 仓库和 Python 应用的核心功能 utils/scheduler.ts - 定时任务管理器 api/python-app/trigger.post.ts - 手动触发 API 端点修改了 middleware/1.api.ts - 在应用启动时初始化定时任务
