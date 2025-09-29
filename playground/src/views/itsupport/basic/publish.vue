@@ -7,6 +7,7 @@ import { Card, message } from 'ant-design-vue';
 import dayjs from 'dayjs';
 
 import { useVbenForm } from '#/adapter/form';
+import { publish } from '#/api';
 
 const nextThursday = dayjs().add((4 - dayjs().day() + 7) % 7 || 7, 'day');
 
@@ -33,7 +34,7 @@ const [BaseForm] = useVbenForm({
   schema: [
     {
       component: 'DatePicker',
-      fieldName: 'datePicker',
+      fieldName: 'version',
       label: '发布版本',
       defaultValue: nextThursday,
     },
@@ -42,7 +43,7 @@ const [BaseForm] = useVbenForm({
       componentProps: {
         class: 'w-auto',
       },
-      fieldName: 'switch',
+      fieldName: 'is_merge',
       help: () =>
         ['分支合并帮助信息', '合并事务分支和时间分支', '谨慎使用！'].map((v) =>
           h('p', v),
@@ -65,7 +66,7 @@ const [BaseForm] = useVbenForm({
         ],
       },
       defaultValue: ['1'],
-      fieldName: 'checkboxGroup',
+      fieldName: 'check_types',
       label: '分析范围',
     },
   ],
@@ -76,6 +77,11 @@ const [BaseForm] = useVbenForm({
 function onSubmit(values: Record<string, any>) {
   message.success({
     content: `form values: ${JSON.stringify(values)}`,
+  });
+  publish(JSON.stringify(values)).then((res) => {
+    message.success({
+      content: `API返回结果: ${res}`,
+    });
   });
 }
 </script>
