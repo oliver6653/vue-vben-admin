@@ -99,8 +99,9 @@ function installDependencies() {
     execSync(
       `cd ${PROJECT_PATH} && pip3 install -r requirements.txt  -i https://mirrors.aliyun.com/pypi/simple`,
       {
-      stdio: 'inherit',
-    });
+        stdio: 'inherit',
+      },
+    );
   } catch (error) {
     console.error('Failed to install dependencies:', error.message);
     throw error;
