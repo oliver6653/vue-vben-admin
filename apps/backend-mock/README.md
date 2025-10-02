@@ -12,6 +12,8 @@ $ pnpm run start
 
 # production mode
 $ pnpm run build
+
+pnpm --filter @vben/backend-mock run start
 ```
 
 # 实现的功能

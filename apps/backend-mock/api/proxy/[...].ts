@@ -5,7 +5,7 @@ export default defineEventHandler(async (event) => {
   const queryString = getQuery(event);
 
   // 目标服务器的基础 URL
-  const targetBaseUrl = 'http://localhost:8889';
+  const targetBaseUrl = 'http://localhost:8890';
 
   // 构建目标 URL
   const targetUrl = `${targetBaseUrl}/${targetPath}${

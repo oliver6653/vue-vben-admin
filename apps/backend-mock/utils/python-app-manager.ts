@@ -7,9 +7,10 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 
 const TMP_DIR = join(__dirname, '../../.tmp');
-const REPO_URL = 'https://gitlab.livit.run/chain-patrol/dlis-moinitor';
-const BRANCH = ''; // 空字符串表示使用默认分支
-const PROJECT_NAME = 'dlis-moinitor';
+// const REPO_URL = 'https://gitlab.livit.run/chain-patrol/dlis-moinitor';
+const REPO_URL = 'https://gitee.com/justin007/public-doc.git';
+const BRANCH = 'feature/main_sync'; // 空字符串表示使用默认分支
+const PROJECT_NAME = 'public-doc';
 const PROJECT_PATH = join(TMP_DIR, PROJECT_NAME);
 
 let pythonProcess: ChildProcess | null = null;
@@ -95,7 +96,9 @@ function updateRepository() {
 function installDependencies() {
   console.log('Installing dependencies...');
   try {
-    execSync(`cd ${PROJECT_PATH} && pip install -r requirements.txt`, {
+    execSync(
+      `cd ${PROJECT_PATH} && pip3 install -r requirements.txt  -i https://mirrors.aliyun.com/pypi/simple`,
+      {
       stdio: 'inherit',
     });
   } catch (error) {

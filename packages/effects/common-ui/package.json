@@ -48,6 +48,7 @@
     "vue-tippy": "catalog:"
   },
   "devDependencies": {
-    "@types/qrcode": "catalog:"
+    "@types/qrcode": "catalog:",
+    "json-bigint": "^1.0.0"
   }
 }

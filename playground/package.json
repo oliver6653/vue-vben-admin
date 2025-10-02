@@ -41,6 +41,7 @@
     "compression": "maximum",
     "artifactName": "${productName}-v${version}-${platform}-${arch}.${ext}",
     "asar": true,
+
     "directories": {
       "output": "dist-electron/release"
     },
@@ -96,6 +97,7 @@
     "vue-router": "catalog:"
   },
   "devDependencies": {
+    "@types/json-bigint": "^1.0.4",
     "cross-env": "catalog:",
     "electron": "catalog:",
     "electron-builder": "catalog:"
