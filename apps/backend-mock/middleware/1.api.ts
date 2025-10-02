@@ -1,15 +1,10 @@
 import { forbiddenResponse, sleep } from '~/utils/response';
 import { startScheduler } from '~/utils/scheduler';
 
-let schedulerStarted = false;
+// 应用启动时立即执行定时任务，确保只执行一次
+startScheduler(10); // 每10分钟检查一次
 
 export default defineEventHandler(async (event) => {
-  // 启动定时任务
-  if (!schedulerStarted) {
-    startScheduler(10); // 每10分钟检查一次
-    schedulerStarted = true;
-  }
-
   event.node.res.setHeader(
     'Access-Control-Allow-Origin',
     event.headers.get('Origin') ?? '*',
