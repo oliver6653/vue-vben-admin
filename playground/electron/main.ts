@@ -1,4 +1,3 @@
-import { readFileSync } from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import process from 'node:process';
@@ -207,33 +206,15 @@ ipcMain.on('quitAndInstall', () => {
 ipcMain.on('checkForUpdates', () => {
   try {
     console.warn('开始检查更新...');
-    // 从 package.json 获取更新地址
-    const packagePath = path.join(
-      process.env.APP_ROOT as string,
-      'package.json',
-    );
-    const packageData = readFileSync(packagePath, 'utf8');
-    const packInfo = JSON.parse(packageData);
-    const [publish] = packInfo.build.publish || [];
-
-    console.warn('Publish config:', publish);
-
-    if (publish && publish.url) {
-      autoUpdater.setFeedURL(publish.url);
-      console.warn('设置更新地址:', publish.url);
-    } else {
-      // 使用默认配置
-      autoUpdater.setFeedURL('http://127.0.0.1:8080');
-      console.warn('使用默认更新地址: http://127.0.0.1:8080');
-    }
-
+    // 设置更新地址
+    autoUpdater.setFeedURL({
+      provider: 'generic',
+      url: 'http://localhost:5320/api/update',
+    });
+    console.warn('设置更新地址: http://localhost:5320/api/update');
     autoUpdater.checkForUpdates();
   } catch (error) {
     console.error('检查更新失败:', error);
-    // 使用默认配置
-    autoUpdater.setFeedURL('http://127.0.0.1:8080');
-    autoUpdater.checkForUpdates();
-
     win?.webContents.send('uploadMessage', {
       payload: {
         status: -1,
