@@ -38,6 +38,8 @@
   "dynamicTitle": "Dynamic Title",
   "watermark": "Watermark",
   "checkUpdates": "Periodic update check",
+  "manualCheckUpdates": "Manual check for updates",
+  "manualCheckUpdatesTip": "Check immediately if a new version is available",
   "position": {
     "title": "Preferences Postion",
     "header": "Header",

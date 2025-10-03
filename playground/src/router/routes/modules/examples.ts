@@ -310,6 +310,15 @@ const routes: RouteRecordRaw[] = [
           title: $t('examples.button-group.title'),
         },
       },
+      {
+        name: 'FeaturesExample',
+        path: '/examples/features',
+        component: () => import('#/views/examples/features/index.vue'),
+        meta: {
+          icon: 'mdi:feature-highlight',
+          title: 'Features',
+        },
+      },
     ],
   },
 ];

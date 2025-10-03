@@ -65,7 +65,7 @@ function defineApplicationConfig(userConfigPromise?: DefineApplicationOptions) {
             entryFileNames: 'jse/index-[name]-[hash].js',
           },
         },
-        target: 'es2015',
+        target: 'es2022', // 修改构建目标以支持顶级 await
       },
       css: createCssOptions(injectGlobalScss),
       esbuild: {
