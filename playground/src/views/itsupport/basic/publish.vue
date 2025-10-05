@@ -80,7 +80,7 @@ function onSubmit(values: Record<string, any>) {
   });
   publish(JSON.stringify(values)).then((res) => {
     message.success({
-      content: `API返回结果: ${res}`,
+      content: `API返回结果: ${res?.data?.message}`,
     });
   });
 }

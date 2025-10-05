@@ -45,3 +45,11 @@ pnpm --filter @vben/backend-mock run start
 2. utils/scheduler.ts - 定时任务管理器
 3. api/python-app/trigger.post.ts - 手动触发 API 端点
 4. 修改了 middleware/1.api.ts - 在应用启动时初始化定时任务
+
+## python 自动安装
+
+1. 测试
+
+```ini
+cd /Users/gao/WebstormProjects/vue-vben-admin && node -e "const { setupAndRunPythonAppAsync } = require('./apps/backend-mock/utils/python-app-manager.ts'); setupAndRunPythonAppAsync();"
+```
