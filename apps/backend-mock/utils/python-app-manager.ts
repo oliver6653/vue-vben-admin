@@ -6,9 +6,9 @@ import { fileURLToPath } from 'node:url';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 
-const TMP_DIR = join(__dirname, '../../.tmp');
+const TMP_DIR = join(__dirname, '../../.cache');
 // const REPO_URL = 'https://gitlab.livit.run/chain-patrol/dlis-moinitor';
-const REPO_URL = 'https://gitee.com/justin007/public-doc.git';
+const REPO_URL = 'git@gitee.com:justin007/public-doc.git'; // 改为SSH URL
 const BRANCH = 'feature/main_sync'; // 空字符串表示使用默认分支
 const PROJECT_NAME = 'public-doc';
 const PROJECT_PATH = join(TMP_DIR, PROJECT_NAME);
@@ -18,6 +18,12 @@ let isChecking = false;
 let hasUpdated = false; // 标记是否有更新
 
 export async function setupAndRunPythonAppAsync() {
+  // 检查环境变量 PYTHON_ENABLE，如果设置为 false 或 0，则不启动 Python 应用
+  const PYTHON_ENABLE = process.env.PYTHON_ENABLE?.toLowerCase();
+  if (PYTHON_ENABLE === 'false' || PYTHON_ENABLE === '0') {
+    console.log('PYTHON_ENABLE is set to false, skipping Python app setup.');
+    return;
+  }
   // 异步执行，不阻塞主线程
   setImmediate(() => {
     setupAndRunPythonApp();
