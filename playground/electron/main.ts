@@ -22,6 +22,7 @@ process.env.APP_ROOT = path.join(__dirname, '../..');
 export const MAIN_DIST = path.join(process.env.APP_ROOT, 'dist-electron');
 export const RENDERER_DIST = path.join(process.env.APP_ROOT, 'dist');
 export const VITE_DEV_SERVER_URL = process.env.VITE_DEV_SERVER_URL;
+const VITE_DEVTOOLS = process.env.VITE_DEVTOOLS !== 'false'; // 默认为true，除非明确设置为false
 
 process.env.VITE_PUBLIC = VITE_DEV_SERVER_URL
   ? path.join(process.env.APP_ROOT, 'public')
@@ -110,7 +111,7 @@ async function createWindow() {
   });
 
   // 为开发环境添加上下文菜单
-  if (VITE_DEV_SERVER_URL) {
+  if (VITE_DEVTOOLS) {
     win.webContents.on('context-menu', (_event, params) => {
       const { x, y } = params;
       const menu = new Menu();
@@ -251,7 +252,7 @@ app
   .then(createWindow)
   .then(() => {
     // 在开发环境中添加开发专用菜单
-    if (VITE_DEV_SERVER_URL) {
+    if (VITE_DEVTOOLS) {
       const devMenu = Menu.buildFromTemplate([
         {
           label: '开发工具',
@@ -293,7 +294,7 @@ app
       Menu.setApplicationMenu(null);
     }
     // 禁用了菜单之后，默认的快捷键也会被禁用，这里重新注册部分常用快捷键
-    if (VITE_DEV_SERVER_URL) {
+    if (VITE_DEVTOOLS) {
       // 开发模式下监听快捷键来打开开发者工具
       globalShortcut.register('CmdOrCtrl+Shift+I', () => {
         BrowserWindow.getFocusedWindow()?.webContents.toggleDevTools();

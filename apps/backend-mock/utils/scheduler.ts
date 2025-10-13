@@ -1,14 +1,18 @@
+import { logger } from './logger';
 import { setupAndRunPythonAppAsync } from './python-app-manager';
 
 let intervalId: NodeJS.Timeout | null = null;
 
 export function startScheduler(intervalMinutes: number = 10) {
   if (intervalId) {
-    console.log('Scheduler is already running');
+    logger.info('Scheduler is already running', 'Scheduler');
     return;
   }
 
-  console.log(`Starting scheduler with interval ${intervalMinutes} minutes`);
+  logger.info(
+    `Starting scheduler with interval ${intervalMinutes} minutes`,
+    'Scheduler',
+  );
 
   // 立即执行一次
   setupAndRunPythonAppAsync();
@@ -26,6 +30,6 @@ export function stopScheduler() {
   if (intervalId) {
     clearInterval(intervalId);
     intervalId = null;
-    console.log('Scheduler stopped');
+    logger.info('Scheduler stopped', 'Scheduler');
   }
 }

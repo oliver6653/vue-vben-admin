@@ -1,3 +1,5 @@
+import { logger } from '~/utils/logger';
+
 // server/api/proxy/[...].ts
 export default defineEventHandler(async (event) => {
   // 获取原始请求的路径和查询参数
@@ -40,7 +42,7 @@ export default defineEventHandler(async (event) => {
 
     return response;
   } catch (error: any) {
-    console.error('Proxy error:', error);
+    logger.error(`Proxy error: ${error}`, 'Proxy');
 
     // 改进的错误处理
     const statusCode = error.response?.status || 500;

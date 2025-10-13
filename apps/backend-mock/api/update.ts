@@ -8,6 +8,7 @@ import {
   setHeaders,
   setResponseStatus,
 } from 'h3';
+import { logger } from '~/utils/logger';
 
 // 设置更新目录
 const updateDir = '/tmp/electron-update-server/latest';
@@ -17,7 +18,7 @@ if (!fs.existsSync(updateDir)) {
   try {
     fs.mkdirSync(updateDir, { recursive: true });
   } catch (error) {
-    console.warn('Failed to create update directory:', error);
+    logger.warn(`Failed to create update directory: ${error}`, 'UpdateAPI');
   }
 }
 
@@ -46,7 +47,7 @@ export default defineEventHandler(async (event) => {
   // 处理不同类型的文件请求
   if (fileName.endsWith('.yml') || fileName.endsWith('.yaml')) {
     const filePath = path.join(updateDir, fileName);
-    console.warn('请求YAML文件:', filePath);
+    logger.warn(`请求YAML文件: ${filePath}`, 'UpdateAPI');
 
     if (fs.existsSync(filePath)) {
       setHeaders(event, {
@@ -54,7 +55,7 @@ export default defineEventHandler(async (event) => {
       });
       return fs.readFileSync(filePath, 'utf8');
     } else {
-      console.warn('文件不存在:', filePath);
+      logger.warn(`文件不存在: ${filePath}`, 'UpdateAPI');
       setResponseStatus(event, 404);
       return 'File not found';
     }
@@ -62,7 +63,7 @@ export default defineEventHandler(async (event) => {
 
   if (fileName.endsWith('.json')) {
     const filePath = path.join(updateDir, fileName);
-    console.warn('请求JSON文件:', filePath);
+    logger.warn(`请求JSON文件: ${filePath}`, 'UpdateAPI');
 
     if (fs.existsSync(filePath)) {
       setHeaders(event, {
@@ -70,7 +71,7 @@ export default defineEventHandler(async (event) => {
       });
       return fs.readFileSync(filePath, 'utf8');
     } else {
-      console.warn('文件不存在:', filePath);
+      logger.warn(`文件不存在: ${filePath}`, 'UpdateAPI');
       setResponseStatus(event, 404);
       return 'File not found';
     }
@@ -83,7 +84,7 @@ export default defineEventHandler(async (event) => {
     fileName.endsWith('.exe')
   ) {
     const filePath = path.join(updateDir, fileName);
-    console.warn('请求更新包文件:', filePath);
+    logger.warn(`请求更新包文件: ${filePath}`, 'UpdateAPI');
 
     if (fs.existsSync(filePath)) {
       // 对于文件下载，重定向到文件路径
@@ -92,7 +93,7 @@ export default defineEventHandler(async (event) => {
       });
       return fs.readFileSync(filePath);
     } else {
-      console.warn('更新包文件不存在:', filePath);
+      logger.warn(`更新包文件不存在: ${filePath}`, 'UpdateAPI');
       setResponseStatus(event, 404);
       return 'Update file not found';
     }

@@ -1,17 +1,53 @@
 import { ChildProcess, execSync, spawn } from 'node:child_process';
 import { existsSync, mkdirSync } from 'node:fs';
+import { homedir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
+
+import { logger } from './logger';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 
-const TMP_DIR = join(__dirname, '../../.cache');
+// 支持通过环境变量配置目录，如果未配置或目录不存在则使用默认方式
+const DEFAULT_TMP_DIR = join(homedir(), '.vben', '.cache');
+const TMP_DIR = process.env.BACKEND_MOCK_CACHE_DIR || DEFAULT_TMP_DIR;
+const PROJECT_NAME = 'public-doc';
+
+// 确保临时目录存在
+function ensureTmpDirectory(): string {
+  try {
+    // 首先尝试使用配置的目录
+    if (existsSync(TMP_DIR)) {
+      return TMP_DIR;
+    }
+
+    // 如果目录不存在，尝试创建它
+    if (!existsSync(TMP_DIR)) {
+      mkdirSync(TMP_DIR, { recursive: true });
+      return TMP_DIR;
+    }
+  } catch {
+    // 如果配置的目录无法使用，回退到默认目录
+    logger.warn(
+      `Failed to use configured cache directory: ${TMP_DIR}, falling back to default: ${DEFAULT_TMP_DIR}`,
+      'PythonApp',
+    );
+    if (!existsSync(DEFAULT_TMP_DIR)) {
+      mkdirSync(DEFAULT_TMP_DIR, { recursive: true });
+    }
+    return DEFAULT_TMP_DIR;
+  }
+
+  return DEFAULT_TMP_DIR;
+}
+
+const actualTmpDir = ensureTmpDirectory();
+const actualProjectPath = join(actualTmpDir, PROJECT_NAME);
+
 // const REPO_URL = 'https://gitlab.livit.run/chain-patrol/dlis-moinitor';
 const REPO_URL = 'git@gitee.com:justin007/public-doc.git'; // 改为SSH URL
 const BRANCH = 'feature/main_sync'; // 空字符串表示使用默认分支
-const PROJECT_NAME = 'public-doc';
-const PROJECT_PATH = join(TMP_DIR, PROJECT_NAME);
 
 let pythonProcess: ChildProcess | null = null;
 let isChecking = false;
@@ -21,7 +57,10 @@ export async function setupAndRunPythonAppAsync() {
   // 检查环境变量 PYTHON_ENABLE，如果设置为 false 或 0，则不启动 Python 应用
   const PYTHON_ENABLE = process.env.PYTHON_ENABLE?.toLowerCase();
   if (PYTHON_ENABLE === 'false' || PYTHON_ENABLE === '0') {
-    console.log('PYTHON_ENABLE is set to false, skipping Python app setup.');
+    logger.info(
+      'PYTHON_ENABLE is set to false, skipping Python app setup.',
+      'PythonApp',
+    );
     return;
   }
   // 异步执行，不阻塞主线程
@@ -32,18 +71,13 @@ export async function setupAndRunPythonAppAsync() {
 
 function setupAndRunPythonApp() {
   if (isChecking) {
-    console.log('Python app check is already in progress');
+    logger.info('Python app check is already in progress', 'PythonApp');
     return;
   }
 
   isChecking = true;
 
   try {
-    // 创建 .tmp 目录（如果不存在）
-    if (!existsSync(TMP_DIR)) {
-      mkdirSync(TMP_DIR, { recursive: true });
-    }
-
     // 克隆或更新仓库
     updateRepository();
 
@@ -53,57 +87,66 @@ function setupAndRunPythonApp() {
     // 启动 Python 应用
     startPythonApplication();
   } catch (error) {
-    console.error('Error in setup and run Python app:', error.message);
+    logger.error(
+      `Error in setup and run Python app: ${error.message}`,
+      'PythonApp',
+    );
   } finally {
     isChecking = false;
   }
 }
 
 function updateRepository() {
-  if (existsSync(PROJECT_PATH)) {
-    console.log('Checking for updates in existing repository...');
+  if (existsSync(actualProjectPath)) {
+    logger.info('Checking for updates in existing repository...', 'PythonApp');
     try {
       // 先检查本地和远程提交记录
-      const localCommit = execSync(`cd ${PROJECT_PATH} && git rev-parse HEAD`, {
-        encoding: 'utf8',
-      }).trim();
+      const localCommit = execSync(
+        `cd ${actualProjectPath} && git rev-parse HEAD`,
+        {
+          encoding: 'utf8',
+        },
+      ).trim();
 
       let remoteCommit;
       try {
         // 尝试获取远程提交记录
-        execSync(`cd ${PROJECT_PATH} && git fetch`, { stdio: 'pipe' });
-        remoteCommit = execSync(`cd ${PROJECT_PATH} && git rev-parse @{u}`, {
-          encoding: 'utf8',
-        }).trim();
+        execSync(`cd ${actualProjectPath} && git fetch`, { stdio: 'pipe' });
+        remoteCommit = execSync(
+          `cd ${actualProjectPath} && git rev-parse @{u}`,
+          {
+            encoding: 'utf8',
+          },
+        ).trim();
       } catch {
-        console.log('无法获取远程提交记录，使用本地记录继续');
+        logger.info('无法获取远程提交记录，使用本地记录继续', 'PythonApp');
         remoteCommit = localCommit;
       }
 
-      console.log(`本地提交记录: ${localCommit}`);
-      console.log(`远程提交记录: ${remoteCommit}`);
+      logger.info(`本地提交记录: ${localCommit}`, 'PythonApp');
+      logger.info(`远程提交记录: ${remoteCommit}`, 'PythonApp');
 
       // 检查本地是否有未提交的更改
       const hasLocalChanges = execSync(
-        `cd ${PROJECT_PATH} && git status --porcelain`,
+        `cd ${actualProjectPath} && git status --porcelain`,
         { encoding: 'utf8' },
       ).trim();
 
       let shouldUpdate = false;
 
       if (localCommit !== remoteCommit) {
-        console.log('发现远程有更新，需要拉取最新代码');
+        logger.info('发现远程有更新，需要拉取最新代码', 'PythonApp');
         shouldUpdate = true;
       } else if (hasLocalChanges) {
-        console.log('本地存在未提交的更改');
+        logger.info('本地存在未提交的更改', 'PythonApp');
       } else {
-        console.log('代码仓库已是最新版本');
+        logger.info('代码仓库已是最新版本', 'PythonApp');
       }
 
       // 如果需要更新或者有本地更改，则执行更新操作
       if (shouldUpdate) {
-        console.log('正在拉取最新更改...');
-        execSync(`cd ${PROJECT_PATH} && git pull`, { stdio: 'inherit' });
+        logger.info('正在拉取最新更改...', 'PythonApp');
+        execSync(`cd ${actualProjectPath} && git pull`, { stdio: 'inherit' });
         hasUpdated = true; // 标记已更新
       }
 
@@ -112,75 +155,82 @@ function updateRepository() {
         try {
           // 检查 requirements.txt 相对于上一个提交是否有变化
           const requirementsDiff = execSync(
-            `cd ${PROJECT_PATH} && git diff HEAD@{1} HEAD --name-only | grep requirements.txt`,
+            `cd ${actualProjectPath} && git diff HEAD@{1} HEAD --name-only | grep requirements.txt`,
             { encoding: 'utf8', stdio: 'pipe' },
           ).trim();
 
           if (requirementsDiff) {
-            console.log('检测到 requirements.txt 有变更，标记需要重新安装依赖');
+            logger.info(
+              '检测到 requirements.txt 有变更，标记需要重新安装依赖',
+              'PythonApp',
+            );
             // 创建一个标记文件，表示需要重新安装依赖
-            execSync(`cd ${PROJECT_PATH} && touch .reinstall_deps`, {
+            execSync(`cd ${actualProjectPath} && touch .reinstall_deps`, {
               stdio: 'pipe',
             });
           }
         } catch {
           // grep 没有匹配结果时会返回非0退出码，这是正常情况
-          console.log('requirements.txt 无变更');
+          logger.info('requirements.txt 无变更', 'PythonApp');
         }
       }
     } catch (error) {
-      console.error('检查/更新仓库时出错:', error.message);
+      logger.error(`检查/更新仓库时出错: ${error.message}`, 'PythonApp');
       throw error;
     }
   } else {
-    console.log('Cloning repository...');
+    logger.info('Cloning repository...', 'PythonApp');
     try {
       // 如果没有指定分支，则使用默认分支
       if (BRANCH) {
-        execSync(`git clone -b ${BRANCH} ${REPO_URL} ${PROJECT_PATH}`, {
+        execSync(`git clone -b ${BRANCH} ${REPO_URL} ${actualProjectPath}`, {
           stdio: 'inherit',
         });
       } else {
-        execSync(`git clone ${REPO_URL} ${PROJECT_PATH}`, { stdio: 'inherit' });
+        execSync(`git clone ${REPO_URL} ${actualProjectPath}`, {
+          stdio: 'inherit',
+        });
       }
       // 新克隆的仓库标记需要安装依赖
-      execSync(`cd ${PROJECT_PATH} && touch .reinstall_deps`, {
+      execSync(`cd ${actualProjectPath} && touch .reinstall_deps`, {
         stdio: 'pipe',
       });
       hasUpdated = true; // 标记已更新
     } catch (error) {
-      console.error('Failed to clone repository:', error.message);
+      logger.error(`Failed to clone repository: ${error.message}`, 'PythonApp');
       throw error;
     }
   }
 }
 
 function installDependencies() {
-  console.log('Checking if dependencies need to be installed...');
+  logger.info('Checking if dependencies need to be installed...', 'PythonApp');
   try {
     // 检查是否需要重新安装依赖
-    const reinstallFlag = existsSync(join(PROJECT_PATH, '.reinstall_deps'));
+    const reinstallFlag = existsSync(
+      join(actualProjectPath, '.reinstall_deps'),
+    );
 
     if (reinstallFlag) {
-      console.log('发现依赖变更标记，正在安装/更新依赖...');
+      logger.info('发现依赖变更标记，正在安装/更新依赖...', 'PythonApp');
       execSync(
-        `cd ${PROJECT_PATH} && pip3 install -r requirements.txt -i https://mirrors.aliyun.com/pypi/simple`,
+        `cd ${actualProjectPath} && pip3 install -r requirements.txt -i https://mirrors.aliyun.com/pypi/simple`,
         {
           stdio: 'inherit',
         },
       );
       // 安装完成后删除标记文件
-      execSync(`cd ${PROJECT_PATH} && rm -f .reinstall_deps`, {
+      execSync(`cd ${actualProjectPath} && rm -f .reinstall_deps`, {
         stdio: 'pipe',
       });
     } else {
-      console.log('检查现有依赖是否完整...');
+      logger.info('检查现有依赖是否完整...', 'PythonApp');
       // 检查是否所有必需的包都已经安装
       const missingPackages = [];
 
       // 读取 requirements.txt 文件
       const requirements = execSync(
-        `cd ${PROJECT_PATH} && cat requirements.txt`,
+        `cd ${actualProjectPath} && cat requirements.txt`,
         {
           encoding: 'utf8',
         },
@@ -207,21 +257,22 @@ function installDependencies() {
       }
 
       if (missingPackages.length > 0) {
-        console.log(
+        logger.info(
           `发现缺失的依赖包: ${missingPackages.join(', ')}，正在安装...`,
+          'PythonApp',
         );
         execSync(
-          `cd ${PROJECT_PATH} && pip3 install -r requirements.txt -i https://mirrors.aliyun.com/pypi/simple`,
+          `cd ${actualProjectPath} && pip3 install -r requirements.txt -i https://mirrors.aliyun.com/pypi/simple`,
           {
             stdio: 'inherit',
           },
         );
       } else {
-        console.log('所有依赖包均已安装');
+        logger.info('所有依赖包均已安装', 'PythonApp');
       }
     }
   } catch (error) {
-    console.error('检查或安装依赖时出错:', error.message);
+    logger.error(`检查或安装依赖时出错: ${error.message}`, 'PythonApp');
     throw error;
   }
 }
@@ -229,46 +280,75 @@ function installDependencies() {
 function startPythonApplication() {
   // 只有在有更新或应用未运行时才启动Python应用
   if (!hasUpdated && isPythonAppRunning()) {
-    console.log(
+    logger.info(
       'Python application is already running and no updates were detected.',
+      'PythonApp',
     );
     return;
   }
 
   // 如果应用已经在运行，先停止它
   if (isPythonAppRunning()) {
-    console.log('Stopping existing Python application to apply updates...');
+    logger.info(
+      'Stopping existing Python application to apply updates...',
+      'PythonApp',
+    );
     stopPythonApp();
     // 等待一段时间确保进程完全停止
     try {
       execSync('sleep 2', { stdio: 'pipe' });
     } catch {
-      console.log('Sleep interrupted, continuing...');
+      logger.info('Sleep interrupted, continuing...', 'PythonApp');
     }
   }
 
-  console.log('Starting Python application...', pythonProcess?.exitCode);
+  logger.info(
+    `Starting Python application... ${pythonProcess?.exitCode}`,
+    'PythonApp',
+  );
 
   try {
     pythonProcess = spawn('python3', ['app.py'], {
-      cwd: PROJECT_PATH,
-      stdio: 'inherit',
+      cwd: actualProjectPath,
+      stdio: ['ignore', 'pipe', 'pipe'], // 修改为不继承stdio，而是通过事件处理
+    });
+
+    // 处理Python应用的标准输出
+    pythonProcess.stdout?.on('data', (data) => {
+      const message = data.toString().trim();
+      if (message) {
+        logger.info(message, 'PYTHON');
+      }
+    });
+
+    // 处理Python应用的错误输出
+    pythonProcess.stderr?.on('data', (data) => {
+      const message = data.toString().trim();
+      if (message) {
+        logger.error(message, 'PYTHON');
+      }
     });
 
     pythonProcess.on('close', (code) => {
-      console.log(`Python application exited with code ${code}`);
+      logger.info(`Python application exited with code ${code}`, 'PythonApp');
       pythonProcess = null;
     });
 
     pythonProcess.on('error', (error) => {
-      console.error('Failed to start Python application:', error.message);
+      logger.error(
+        `Failed to start Python application: ${error.message}`,
+        'PythonApp',
+      );
       pythonProcess = null;
     });
 
     // 重置更新标记
     hasUpdated = false;
   } catch (error) {
-    console.error('Failed to start Python application:', error.message);
+    logger.error(
+      `Failed to start Python application: ${error.message}`,
+      'PythonApp',
+    );
     pythonProcess = null;
     throw error;
   }
@@ -338,8 +418,11 @@ export function stopPythonApp() {
     const port = 8890;
     const cmd = `lsof -ti :${port} | xargs kill -9 2>/dev/null || true`;
     execSync(cmd, { stdio: 'pipe' });
-    console.log(`Terminated any processes on port ${port}`);
+    logger.info(`Terminated any processes on port ${port}`, 'PythonApp');
   } catch {
-    console.log('No process was found on port 8890 or failed to terminate');
+    logger.info(
+      'No process was found on port 8890 or failed to terminate',
+      'PythonApp',
+    );
   }
 }
