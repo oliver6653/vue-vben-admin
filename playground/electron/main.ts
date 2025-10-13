@@ -1,3 +1,5 @@
+// 引入子进程模块用于启动backend-mock服务
+import { ChildProcess, spawn } from 'node:child_process';
 import os from 'node:os';
 import path from 'node:path';
 import process from 'node:process';
@@ -14,8 +16,6 @@ import {
 } from 'electron';
 // 引入 autoUpdater 模块
 import { autoUpdater } from 'electron-updater';
-// 引入子进程模块用于启动backend-mock服务
-import { spawn, ChildProcess } from 'node:child_process';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
@@ -69,27 +69,34 @@ const statusMessage = {
 async function startBackendMock() {
   try {
     // 检查backend-mock目录是否存在
-    const backendMockPath = path.join(process.env.APP_ROOT, '../apps/backend-mock');
-    
+    const backendMockPath = path.join(
+      process.env.APP_ROOT,
+      '../apps/backend-mock',
+    );
+
     console.warn('Starting backend-mock server from:', backendMockPath);
-    
+
     // 使用spawn启动backend-mock服务
     backendMockProcess = spawn('npx', ['nitro', 'dev', '--port', '5320'], {
       cwd: backendMockPath,
       stdio: ['ignore', 'pipe', 'pipe'],
       env: {
         ...process.env,
-        PORT: '5320' // 指定端口
-      }
+        PORT: '5320', // 指定端口
+      },
     });
 
     // 监听stdout输出
     backendMockProcess.stdout?.on('data', (data) => {
       const output = data.toString();
       console.warn('[backend-mock]', output);
-      
+
       // 检查服务是否启动成功
-      if (output.includes('Listening') || output.includes('Server started') || output.includes('Local:')) {
+      if (
+        output.includes('Listening') ||
+        output.includes('Server started') ||
+        output.includes('Local:')
+      ) {
         console.warn('Backend-mock server started successfully on port 5320');
       }
     });
@@ -110,7 +117,10 @@ async function startBackendMock() {
       console.error('[backend-mock] Failed to start process:', error);
     });
 
-    console.warn('Backend-mock process started with PID:', backendMockProcess.pid);
+    console.warn(
+      'Backend-mock process started with PID:',
+      backendMockProcess.pid,
+    );
   } catch (error) {
     console.error('Failed to start backend-mock server:', error);
   }
@@ -122,15 +132,15 @@ async function stopBackendMock() {
     try {
       console.warn('Stopping backend-mock server...');
       backendMockProcess.kill('SIGTERM');
-      
+
       // 等待一段时间让进程正常关闭
-      await new Promise(resolve => setTimeout(resolve, 1000));
-      
+      await new Promise((resolve) => setTimeout(resolve, 1000));
+
       // 如果进程仍未关闭，强制杀死
       if (backendMockProcess.exitCode === null) {
         backendMockProcess.kill('SIGKILL');
       }
-      
+
       backendMockProcess = null;
       console.warn('Backend-mock server stopped');
     } catch (error) {
@@ -147,7 +157,10 @@ async function testBackendMockService() {
     if (response.ok) {
       console.warn('Backend-mock service is running properly');
     } else {
-      console.warn('Backend-mock service responded with status:', response.status);
+      console.warn(
+        'Backend-mock service responded with status:',
+        response.status,
+      );
     }
   } catch (error) {
     console.error('Failed to connect to backend-mock service:', error);
@@ -346,12 +359,12 @@ app
   .then(async () => {
     // 启动backend-mock服务
     await startBackendMock();
-    
+
     // 延迟测试backend-mock服务
     setTimeout(() => {
       testBackendMockService();
     }, 3000);
-    
+
     // 在开发环境中添加开发专用菜单
     if (VITE_DEVTOOLS) {
       const devMenu = Menu.buildFromTemplate([
@@ -427,7 +440,7 @@ app.on('window-all-closed', () => {
 app.on('before-quit', async (event) => {
   // 阻止默认行为，等待backend-mock服务关闭
   event.preventDefault();
-  
+
   try {
     // 确保关闭backend-mock服务
     await stopBackendMock();
