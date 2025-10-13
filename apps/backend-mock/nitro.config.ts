@@ -17,4 +17,10 @@ export default defineNitroConfig({
       },
     },
   },
+  // 添加输出配置
+  output: {
+    dir: './dist',
+    serverDir: './dist/server',
+    publicDir: './dist/public',
+  },
 });

@@ -1939,6 +1939,12 @@ importers:
       electron-builder:
         specifier: 'catalog:'
         version: 25.1.8(electron-builder-squirrel-windows@25.1.8)
+      nitropack:
+        specifier: 'catalog:'
+        version: 2.11.11(@netlify/blobs@8.2.0)(encoding@0.1.13)
+      path-browserify:
+        specifier: ^1.0.1
+        version: 1.0.1
 
   scripts/turbo-run:
     dependencies:

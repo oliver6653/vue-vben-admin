@@ -14,6 +14,8 @@ import {
 } from 'electron';
 // 引入 autoUpdater 模块
 import { autoUpdater } from 'electron-updater';
+// 引入子进程模块用于启动backend-mock服务
+import { spawn, ChildProcess } from 'node:child_process';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
@@ -39,6 +41,8 @@ if (!app.requestSingleInstanceLock()) {
 }
 
 let win: BrowserWindow | null = null;
+// 添加backend-mock服务进程变量
+let backendMockProcess: ChildProcess | null = null;
 const preload = path.join(__dirname, '../preload/preload.mjs');
 const indexHtml = path.join(RENDERER_DIST, 'index.html');
 
@@ -60,6 +64,95 @@ const statusMessage = {
   updateNotAva: { status: 2, msg: '您现在使用的版本为最新版本,无需更新!' },
   downloadSuccess: { status: 3, msg: '下载新版成功' },
 };
+
+// 启动backend-mock服务的函数
+async function startBackendMock() {
+  try {
+    // 检查backend-mock目录是否存在
+    const backendMockPath = path.join(process.env.APP_ROOT, '../apps/backend-mock');
+    
+    console.warn('Starting backend-mock server from:', backendMockPath);
+    
+    // 使用spawn启动backend-mock服务
+    backendMockProcess = spawn('npx', ['nitro', 'dev', '--port', '5320'], {
+      cwd: backendMockPath,
+      stdio: ['ignore', 'pipe', 'pipe'],
+      env: {
+        ...process.env,
+        PORT: '5320' // 指定端口
+      }
+    });
+
+    // 监听stdout输出
+    backendMockProcess.stdout?.on('data', (data) => {
+      const output = data.toString();
+      console.warn('[backend-mock]', output);
+      
+      // 检查服务是否启动成功
+      if (output.includes('Listening') || output.includes('Server started') || output.includes('Local:')) {
+        console.warn('Backend-mock server started successfully on port 5320');
+      }
+    });
+
+    // 监听stderr输出
+    backendMockProcess.stderr?.on('data', (data) => {
+      console.error('[backend-mock] Error:', data.toString());
+    });
+
+    // 监听进程关闭事件
+    backendMockProcess.on('close', (code) => {
+      console.warn(`[backend-mock] Process exited with code ${code}`);
+      backendMockProcess = null;
+    });
+
+    // 监听进程错误事件
+    backendMockProcess.on('error', (error) => {
+      console.error('[backend-mock] Failed to start process:', error);
+    });
+
+    console.warn('Backend-mock process started with PID:', backendMockProcess.pid);
+  } catch (error) {
+    console.error('Failed to start backend-mock server:', error);
+  }
+}
+
+// 关闭backend-mock服务的函数
+async function stopBackendMock() {
+  if (backendMockProcess) {
+    try {
+      console.warn('Stopping backend-mock server...');
+      backendMockProcess.kill('SIGTERM');
+      
+      // 等待一段时间让进程正常关闭
+      await new Promise(resolve => setTimeout(resolve, 1000));
+      
+      // 如果进程仍未关闭，强制杀死
+      if (backendMockProcess.exitCode === null) {
+        backendMockProcess.kill('SIGKILL');
+      }
+      
+      backendMockProcess = null;
+      console.warn('Backend-mock server stopped');
+    } catch (error) {
+      console.error('Error stopping backend-mock server:', error);
+      throw error;
+    }
+  }
+}
+
+// 添加一个函数来测试backend-mock服务是否正常运行
+async function testBackendMockService() {
+  try {
+    const response = await fetch('http://localhost:5320/api');
+    if (response.ok) {
+      console.warn('Backend-mock service is running properly');
+    } else {
+      console.warn('Backend-mock service responded with status:', response.status);
+    }
+  } catch (error) {
+    console.error('Failed to connect to backend-mock service:', error);
+  }
+}
 
 async function createWindow() {
   win = new BrowserWindow({
@@ -250,7 +343,15 @@ ipcMain.on('downLoadUpdate', () => {
 app
   .whenReady()
   .then(createWindow)
-  .then(() => {
+  .then(async () => {
+    // 启动backend-mock服务
+    await startBackendMock();
+    
+    // 延迟测试backend-mock服务
+    setTimeout(() => {
+      testBackendMockService();
+    }, 3000);
+    
     // 在开发环境中添加开发专用菜单
     if (VITE_DEVTOOLS) {
       const devMenu = Menu.buildFromTemplate([
@@ -315,7 +416,27 @@ app
 
 app.on('window-all-closed', () => {
   win = null;
-  if (process.platform !== 'darwin') app.quit();
+  if (process.platform !== 'darwin') {
+    // 应用退出前关闭backend-mock服务
+    stopBackendMock().then(() => {
+      app.quit();
+    });
+  }
+});
+
+app.on('before-quit', async (event) => {
+  // 阻止默认行为，等待backend-mock服务关闭
+  event.preventDefault();
+  
+  try {
+    // 确保关闭backend-mock服务
+    await stopBackendMock();
+  } catch (error) {
+    console.error('Error stopping backend-mock server:', error);
+  } finally {
+    // 强制退出应用
+    app.exit(0);
+  }
 });
 
 app.on('will-quit', () => {

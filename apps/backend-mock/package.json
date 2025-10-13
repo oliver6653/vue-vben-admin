@@ -17,5 +17,14 @@
   "devDependencies": {
     "@types/jsonwebtoken": "catalog:",
     "h3": "catalog:"
-  }
+  },
+  "exports": {
+    ".": {
+      "import": "./dist/index.mjs",
+      "require": "./dist/index.cjs"
+    }
+  },
+  "main": "./dist/index.mjs",
+  "module": "./dist/index.mjs",
+  "types": "./dist/index.d.ts"
 }

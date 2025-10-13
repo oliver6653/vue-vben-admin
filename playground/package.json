@@ -110,6 +110,7 @@
     "@types/json-bigint": "^1.0.4",
     "cross-env": "catalog:",
     "electron": "catalog:",
-    "electron-builder": "catalog:"
+    "electron-builder": "catalog:",
+    "nitropack": "catalog:"
   }
 }

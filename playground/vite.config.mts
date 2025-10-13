@@ -17,6 +17,12 @@ export default defineConfig(async () => {
           },
         },
       },
+      // 添加构建配置以解决fsevents问题
+      build: {
+        rollupOptions: {
+          external: ['fsevents']
+        }
+      }
     },
   };
 });
