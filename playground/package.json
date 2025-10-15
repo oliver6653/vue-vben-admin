@@ -17,6 +17,8 @@
   "type": "module",
   "scripts": {
     "build": "pnpm vite build --mode production && electron-builder",
+    "build:mac": "pnpm vite build --mode production && CSC_IDENTITY_AUTO_DISCOVERY=false electron-builder --mac zip",
+    "build:mac-dmg": "pnpm vite build --mode production && CSC_IDENTITY_AUTO_DISCOVERY=false electron-builder --mac",
     "build:analyze": "pnpm vite build --mode analyze",
     "dev": "cross-env ELECTRON_DISABLE_SECURITY_WARNINGS=true pnpm vite --mode development",
     "preview": "vite preview",
@@ -38,7 +40,7 @@
     "productName": "VbenAdminPlayground",
     "appId": "pro.vben.playground",
     "copyright": "vben.pro © 2025",
-    "compression": "maximum",
+    "compression": "normal",
     "artifactName": "${productName}-v${version}-${platform}-${arch}.${ext}",
     "asar": true,
 
@@ -52,6 +54,24 @@
       "!node_modules/**",
       "!dist-electron/release/**"
     ],
+    "extraResources": [
+      {
+        "from": "../apps/backend-mock/dist",
+        "to": "apps/backend-mock/dist",
+        "filter": ["**/*"]
+      },
+      {
+        "from": "../apps/backend-mock/.output",
+        "to": "apps/backend-mock/.output",
+        "filter": ["**/*"]
+      }
+    ],
+    "mac": {
+      "icon": "./electron/logo/logo_256.ico",
+      "target": [
+        "zip"
+      ]
+    },
     "nsis": {
       "oneClick": false,
       "allowToChangeInstallationDirectory": true,
@@ -64,9 +84,6 @@
     "win": {
       "icon": "./electron/logo/logo_256.ico",
       "target": "nsis"
-    },
-    "mac": {
-      "icon": "./electron/logo/logo_256.ico"
     },
     "linux": {
       "icon": "./electron/logo/logo_256.ico"

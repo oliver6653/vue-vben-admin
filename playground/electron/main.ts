@@ -1,5 +1,7 @@
 // 引入子进程模块用于启动backend-mock服务
 import { ChildProcess, spawn } from 'node:child_process';
+// 引入文件系统模块用于日志记录
+import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import process from 'node:process';
@@ -25,6 +27,67 @@ export const MAIN_DIST = path.join(process.env.APP_ROOT, 'dist-electron');
 export const RENDERER_DIST = path.join(process.env.APP_ROOT, 'dist');
 export const VITE_DEV_SERVER_URL = process.env.VITE_DEV_SERVER_URL;
 const VITE_DEVTOOLS = process.env.VITE_DEVTOOLS !== 'false'; // 默认为true，除非明确设置为false
+
+// 创建日志目录和文件路径
+const logDir = path.join(os.homedir(), '.vben', '.electron');
+const logFile = path.join(logDir, 'app.log');
+
+// 确保日志目录存在
+if (!fs.existsSync(logDir)) {
+  fs.mkdirSync(logDir, { recursive: true });
+}
+
+/**
+ * 全局日志处理方法
+ * @param level 日志级别
+ * @param messages 日志消息
+ */
+function logMessage(level: string, ...messages: any[]) {
+  // 使用本地时间并格式化为标准格式
+  const now = new Date();
+  const year = now.getFullYear();
+  const month = String(now.getMonth() + 1).padStart(2, '0');
+  const day = String(now.getDate()).padStart(2, '0');
+  const hours = String(now.getHours()).padStart(2, '0');
+  const minutes = String(now.getMinutes()).padStart(2, '0');
+  const seconds = String(now.getSeconds()).padStart(2, '0');
+  const milliseconds = String(now.getMilliseconds()).padStart(3, '0');
+
+  const timestamp = `${year}-${month}-${day} ${hours}:${minutes}:${seconds}.${milliseconds}`;
+  const logEntry = `[${timestamp}] [${level}] ${messages.join(' ')}\n`;
+
+  // 输出到控制台
+  switch (level) {
+    case 'ERROR': {
+      console.error(...messages);
+      break;
+    }
+    case 'WARN': {
+      console.warn(...messages);
+      break;
+    }
+    default: {
+      console.warn(...messages);
+    } // 按照项目规范，只使用 warn 和 error
+  }
+
+  // 写入日志文件
+  try {
+    fs.appendFileSync(logFile, logEntry);
+  } catch (error) {
+    // 如果写入失败，至少保证控制台能看到错误
+    console.error('Failed to write to log file:', error);
+  }
+}
+
+/**
+ * 包装 console 方法以同时输出到文件
+ */
+const logger = {
+  log: (...messages: any[]) => logMessage('INFO', ...messages),
+  warn: (...messages: any[]) => logMessage('WARN', ...messages),
+  error: (...messages: any[]) => logMessage('ERROR', ...messages),
+};
 
 process.env.VITE_PUBLIC = VITE_DEV_SERVER_URL
   ? path.join(process.env.APP_ROOT, 'public')
@@ -68,20 +131,63 @@ const statusMessage = {
 // 启动backend-mock服务的函数
 async function startBackendMock() {
   try {
-    // 检查backend-mock目录是否存在
-    const backendMockPath = path.join(
-      process.env.APP_ROOT,
-      '../apps/backend-mock',
-    );
+    // 在生产环境中检查打包后的路径
+    const isDev = !!VITE_DEV_SERVER_URL;
+    
+    // 使用三元表达式确定backend-mock路径
+    const actualBackendMockPath = isDev
+      ? path.join(process.env.APP_ROOT, '../apps/backend-mock')
+      : path.join(process.resourcesPath, 'apps/backend-mock');
 
-    console.warn('Starting backend-mock server from:', backendMockPath);
+    logger.warn('Starting backend-mock server from:', actualBackendMockPath);
+
+    // 检查目录是否存在
+    if (!fs.existsSync(actualBackendMockPath)) {
+      logger.error('Backend-mock directory not found:', actualBackendMockPath);
+      return;
+    }
+
+    // 检查 .output 目录是否存在
+    const outputDir = path.join(actualBackendMockPath, '.output');
+    if (!fs.existsSync(outputDir)) {
+      logger.error('Backend-mock .output directory not found:', outputDir);
+      return;
+    }
+
+    // 检查 server 目录是否存在
+    const serverDir = path.join(outputDir, 'server');
+    if (!fs.existsSync(serverDir)) {
+      logger.error('Backend-mock server directory not found:', serverDir);
+      return;
+    }
+
+    // 直接使用node执行backend-mock的入口文件
+    const entryPath = path.join(serverDir, 'index.mjs');
+
+    // 检查入口文件是否存在
+    if (!fs.existsSync(entryPath)) {
+      logger.error('Backend-mock entry not found:', entryPath);
+      logger.warn('Make sure to build backend-mock before running the app');
+
+      // 列出server目录内容以便调试
+      try {
+        const files = fs.readdirSync(serverDir);
+        logger.warn('Files in server directory:', files);
+      } catch (readdirError) {
+        logger.error('Error reading server directory:', readdirError);
+      }
+
+      return;
+    }
 
     // 使用spawn启动backend-mock服务
-    backendMockProcess = spawn('npx', ['nitro', 'dev', '--port', '5320'], {
-      cwd: backendMockPath,
+    // 在生产环境中优先使用系统node命令而不是Electron可执行文件
+    backendMockProcess = spawn('node', [entryPath], {
+      cwd: actualBackendMockPath,
       stdio: ['ignore', 'pipe', 'pipe'],
       env: {
         ...process.env,
+        HOST: '127.0.0.1', // 明确指定监听地址为IPv4本地地址
         PORT: '5320', // 指定端口
       },
     });
@@ -89,7 +195,7 @@ async function startBackendMock() {
     // 监听stdout输出
     backendMockProcess.stdout?.on('data', (data) => {
       const output = data.toString();
-      console.warn('[backend-mock]', output);
+      logger.warn('[backend-mock]', output);
 
       // 检查服务是否启动成功
       if (
@@ -97,32 +203,32 @@ async function startBackendMock() {
         output.includes('Server started') ||
         output.includes('Local:')
       ) {
-        console.warn('Backend-mock server started successfully on port 5320');
+        logger.warn('Backend-mock server started successfully on port 5320');
       }
     });
 
     // 监听stderr输出
     backendMockProcess.stderr?.on('data', (data) => {
-      console.error('[backend-mock] Error:', data.toString());
+      logger.error('[backend-mock] Error:', data.toString());
     });
 
     // 监听进程关闭事件
     backendMockProcess.on('close', (code) => {
-      console.warn(`[backend-mock] Process exited with code ${code}`);
+      logger.warn(`[backend-mock] Process exited with code ${code}`);
       backendMockProcess = null;
     });
 
     // 监听进程错误事件
     backendMockProcess.on('error', (error) => {
-      console.error('[backend-mock] Failed to start process:', error);
+      logger.error('[backend-mock] Failed to start process:', error);
     });
 
-    console.warn(
+    logger.warn(
       'Backend-mock process started with PID:',
       backendMockProcess.pid,
     );
   } catch (error) {
-    console.error('Failed to start backend-mock server:', error);
+    logger.error('Failed to start backend-mock server:', error);
   }
 }
 
@@ -130,7 +236,7 @@ async function startBackendMock() {
 async function stopBackendMock() {
   if (backendMockProcess) {
     try {
-      console.warn('Stopping backend-mock server...');
+      logger.warn('Stopping backend-mock server...');
       backendMockProcess.kill('SIGTERM');
 
       // 等待一段时间让进程正常关闭
@@ -142,9 +248,9 @@ async function stopBackendMock() {
       }
 
       backendMockProcess = null;
-      console.warn('Backend-mock server stopped');
+      logger.warn('Backend-mock server stopped');
     } catch (error) {
-      console.error('Error stopping backend-mock server:', error);
+      logger.error('Error stopping backend-mock server:', error);
       throw error;
     }
   }
@@ -153,17 +259,20 @@ async function stopBackendMock() {
 // 添加一个函数来测试backend-mock服务是否正常运行
 async function testBackendMockService() {
   try {
+    // 等待一段时间让服务启动
+    await new Promise((resolve) => setTimeout(resolve, 5000));
+
     const response = await fetch('http://localhost:5320/api');
     if (response.ok) {
-      console.warn('Backend-mock service is running properly');
+      logger.warn('Backend-mock service is running properly');
     } else {
-      console.warn(
+      logger.warn(
         'Backend-mock service responded with status:',
         response.status,
       );
     }
   } catch (error) {
-    console.error('Failed to connect to backend-mock service:', error);
+    logger.error('Failed to connect to backend-mock service:', error);
   }
 }
 
@@ -238,7 +347,7 @@ async function createWindow() {
 
 // 自动更新事件处理
 autoUpdater.on('error', (error) => {
-  console.warn('自动更新错误:', error);
+  logger.warn('自动更新错误:', error);
   win?.webContents.send('uploadMessage', {
     payload: statusMessage.error,
     output: error.message || error.toString(),
@@ -246,7 +355,7 @@ autoUpdater.on('error', (error) => {
 });
 
 autoUpdater.on('checking-for-update', (v) => {
-  console.warn('检查中');
+  logger.warn('检查中');
   win?.webContents.send('uploadMessage', {
     payload: statusMessage.checking,
     output: v,
@@ -254,8 +363,8 @@ autoUpdater.on('checking-for-update', (v) => {
 });
 
 autoUpdater.on('update-available', (info) => {
-  console.warn('发现新版本', info);
-  console.warn('更新信息:', JSON.stringify(info, null, 2));
+  logger.warn('发现新版本', info);
+  logger.warn('更新信息:', JSON.stringify(info, null, 2));
   win?.webContents.send('uploadMessage', {
     payload: statusMessage.updateAva,
     output: info,
@@ -263,7 +372,7 @@ autoUpdater.on('update-available', (info) => {
 });
 
 autoUpdater.on('update-not-available', (info) => {
-  console.warn('当前版本为最新版本');
+  logger.warn('当前版本为最新版本');
   win?.webContents.send('uploadMessage', {
     payload: statusMessage.updateNotAva,
     output: info,
@@ -272,13 +381,13 @@ autoUpdater.on('update-not-available', (info) => {
 
 // 更新下载进度事件
 autoUpdater.on('download-progress', (progress) => {
-  console.warn('下载进度:', progress);
+  logger.warn('下载进度:', progress);
   win?.webContents.send('downloadProgress', progress);
 });
 
 // 当下载完更新包后触发
 autoUpdater.on('update-downloaded', (info) => {
-  console.warn('更新下载完成:', info);
+  logger.warn('更新下载完成:', info);
   shell.openPath(info.downloadedFile);
   win?.webContents.send('uploadMessage', {
     payload: statusMessage.downloadSuccess,
@@ -289,7 +398,7 @@ autoUpdater.on('update-downloaded', (info) => {
 
 // 退出并安装更新
 ipcMain.on('quitAndInstall', () => {
-  console.warn('准备退出并安装更新...');
+  logger.warn('准备退出并安装更新...');
   try {
     // 先解除所有窗口的关闭监听，避免更新时出现确认对话框
     if (win) {
@@ -298,7 +407,7 @@ ipcMain.on('quitAndInstall', () => {
     // 确保在 quitAndInstall 之前设置正确的参数
     autoUpdater.quitAndInstall(false, true); // isSilent=false, isForceRunAfter=true
   } catch (error) {
-    console.error('安装更新失败:', error);
+    logger.error('安装更新失败:', error);
     win?.webContents.send('uploadMessage', {
       payload: {
         status: -1,
@@ -312,16 +421,16 @@ ipcMain.on('quitAndInstall', () => {
 // 开始检查更新
 ipcMain.on('checkForUpdates', () => {
   try {
-    console.warn('开始检查更新...');
+    logger.warn('开始检查更新...');
     // 设置更新地址
     autoUpdater.setFeedURL({
       provider: 'generic',
       url: 'http://localhost:5320/api/update',
     });
-    console.warn('设置更新地址: http://localhost:5320/api/update');
+    logger.warn('设置更新地址: http://localhost:5320/api/update');
     autoUpdater.checkForUpdates();
   } catch (error) {
-    console.error('检查更新失败:', error);
+    logger.error('检查更新失败:', error);
     win?.webContents.send('uploadMessage', {
       payload: {
         status: -1,
@@ -334,15 +443,15 @@ ipcMain.on('checkForUpdates', () => {
 
 // 开始下载更新
 ipcMain.on('downLoadUpdate', () => {
-  console.warn('开始下载更新...');
+  logger.warn('开始下载更新...');
   // 使用 .then() 处理 Promise，而不是 .catch()，避免 download-progress 和 update-downloaded 事件无法触发
   autoUpdater
     .downloadUpdate()
     .then(() => {
-      console.warn('下载更新成功');
+      logger.warn('下载更新成功');
     })
     .catch((error) => {
-      console.error('下载更新失败:', error);
+      logger.error('下载更新失败:', error);
       win?.webContents.send('uploadMessage', {
         payload: {
           status: -1,
@@ -445,7 +554,7 @@ app.on('before-quit', async (event) => {
     // 确保关闭backend-mock服务
     await stopBackendMock();
   } catch (error) {
-    console.error('Error stopping backend-mock server:', error);
+    logger.error('Error stopping backend-mock server:', error);
   } finally {
     // 强制退出应用
     app.exit(0);
