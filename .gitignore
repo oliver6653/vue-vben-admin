@@ -51,3 +51,4 @@ vite.config.ts.*
 *.sw?
 .history
 /apps/backend-mock/.tmp/**
+apps/.tmp/public-doc

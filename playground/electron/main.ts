@@ -23,8 +23,24 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
 process.env.APP_ROOT = path.join(__dirname, '../..');
 
-export const MAIN_DIST = path.join(process.env.APP_ROOT, 'dist-electron');
-export const RENDERER_DIST = path.join(process.env.APP_ROOT, 'dist');
+// 获取应用程序根目录的函数，确保在不同启动方式下都能正确获取
+function getAppRoot() {
+  // 如果已经设置了APP_ROOT环境变量，直接返回
+  if (process.env.APP_ROOT) {
+    return process.env.APP_ROOT;
+  }
+
+  // 在生产环境中，通过app.getAppPath()获取应用路径
+  if (app.isPackaged) {
+    return path.join(app.getAppPath(), '..');
+  }
+
+  // 在开发环境中，使用当前工作目录
+  return process.cwd();
+}
+
+export const MAIN_DIST = path.join(getAppRoot(), 'dist-electron');
+export const RENDERER_DIST = path.join(getAppRoot(), 'dist');
 export const VITE_DEV_SERVER_URL = process.env.VITE_DEV_SERVER_URL;
 const VITE_DEVTOOLS = process.env.VITE_DEVTOOLS !== 'false'; // 默认为true，除非明确设置为false
 
@@ -133,13 +149,17 @@ async function startBackendMock() {
   try {
     // 在生产环境中检查打包后的路径
     const isDev = !!VITE_DEV_SERVER_URL;
-    
-    // 使用三元表达式确定backend-mock路径
+
+    // 使用改进的方法确定backend-mock路径
+    // 确保在不同启动方式下都能正确找到资源路径
     const actualBackendMockPath = isDev
-      ? path.join(process.env.APP_ROOT, '../apps/backend-mock')
+      ? path.join(getAppRoot(), '../apps/backend-mock')
       : path.join(process.resourcesPath, 'apps/backend-mock');
 
     logger.warn('Starting backend-mock server from:', actualBackendMockPath);
+    logger.warn('App root:', getAppRoot());
+    logger.warn('Is packaged:', app.isPackaged);
+    logger.warn('Resources path:', process.resourcesPath);
 
     // 检查目录是否存在
     if (!fs.existsSync(actualBackendMockPath)) {
@@ -180,17 +200,44 @@ async function startBackendMock() {
       return;
     }
 
+    // 在生产环境中，使用Electron的process.execPath来启动Node.js应用
+    // 这样可以确保即使在打包应用中也能正确启动Node.js进程
+    const nodeExecutable = isDev ? 'node' : process.execPath;
+
+    // 记录将要执行的命令和参数，方便调试
+    logger.warn('[backend-mock] Executable:', nodeExecutable);
+    logger.warn('[backend-mock] Entry path:', entryPath);
+    logger.warn('[backend-mock] Working directory:', actualBackendMockPath);
+
     // 使用spawn启动backend-mock服务
-    // 在生产环境中优先使用系统node命令而不是Electron可执行文件
-    backendMockProcess = spawn('node', [entryPath], {
-      cwd: actualBackendMockPath,
-      stdio: ['ignore', 'pipe', 'pipe'],
-      env: {
-        ...process.env,
-        HOST: '127.0.0.1', // 明确指定监听地址为IPv4本地地址
-        PORT: '5320', // 指定端口
-      },
-    });
+    // 根据环境选择不同的启动方式
+    if (isDev) {
+      // 开发环境中使用node命令启动
+      backendMockProcess = spawn('node', [entryPath], {
+        cwd: actualBackendMockPath,
+        stdio: ['ignore', 'pipe', 'pipe'],
+        env: {
+          ...process.env,
+          HOST: '127.0.0.1', // 明确指定监听地址为IPv4本地地址
+          PORT: '5320', // 指定端口
+        },
+      });
+    } else {
+      // 生产环境中，使用Electron可执行文件运行脚本
+      // 这是最可靠的方式，因为Electron可执行文件总是可用的
+      logger.warn('[backend-mock] Using Electron executable in production');
+
+      backendMockProcess = spawn(process.execPath, [entryPath], {
+        cwd: actualBackendMockPath,
+        stdio: ['ignore', 'pipe', 'pipe'],
+        env: {
+          ...process.env,
+          ELECTRON_RUN_AS_NODE: '1', // 这个环境变量允许Electron像Node.js一样运行脚本
+          HOST: '127.0.0.1', // 明确指定监听地址为IPv4本地地址
+          PORT: '5320', // 指定端口
+        },
+      });
+    }
 
     // 监听stdout输出
     backendMockProcess.stdout?.on('data', (data) => {
@@ -201,7 +248,9 @@ async function startBackendMock() {
       if (
         output.includes('Listening') ||
         output.includes('Server started') ||
-        output.includes('Local:')
+        output.includes('Local:') ||
+        output.includes('port') ||
+        output.includes('5320')
       ) {
         logger.warn('Backend-mock server started successfully on port 5320');
       }
@@ -209,18 +258,42 @@ async function startBackendMock() {
 
     // 监听stderr输出
     backendMockProcess.stderr?.on('data', (data) => {
-      logger.error('[backend-mock] Error:', data.toString());
+      const errorOutput = data.toString();
+      logger.error('[backend-mock] Error:', errorOutput);
+
+      // 检查是否是端口占用错误
+      if (errorOutput.includes('EADDRINUSE')) {
+        logger.error('[backend-mock] Port 5320 is already in use');
+      }
     });
 
     // 监听进程关闭事件
     backendMockProcess.on('close', (code) => {
       logger.warn(`[backend-mock] Process exited with code ${code}`);
       backendMockProcess = null;
+
+      // 如果进程异常退出，记录可能的原因
+      if (code !== 0 && code !== null) {
+        logger.error(
+          `[backend-mock] Process terminated unexpectedly with code ${code}`,
+        );
+      }
     });
 
     // 监听进程错误事件
     backendMockProcess.on('error', (error) => {
       logger.error('[backend-mock] Failed to start process:', error);
+      logger.error('[backend-mock] Error code:', error.code);
+      logger.error('[backend-mock] Error message:', error.message);
+
+      // 特别处理 spawn 错误
+      if (error.message.includes('ENOENT')) {
+        logger.error(
+          '[backend-mock] Executable not found. Check if the path is correct.',
+        );
+      }
+
+      backendMockProcess = null;
     });
 
     logger.warn(
