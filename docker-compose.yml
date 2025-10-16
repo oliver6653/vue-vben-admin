@@ -1,0 +1,31 @@
+version: '3.8'
+
+services:
+  # 前端服务 (Nginx + Vue应用)
+  frontend:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    ports:
+      - "5380:80"
+    depends_on:
+      - backend
+    networks:
+      - app-network
+
+  # 后端服务 (backend-mock)
+  backend:
+    build:
+      context: .
+      dockerfile: Dockerfile.backend
+    ports:
+      - "5320:5320"
+    networks:
+      - app-network
+    environment:
+      - HOST=0.0.0.0
+      - PORT=5320
+
+networks:
+  app-network:
+    driver: bridge

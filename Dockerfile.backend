@@ -1,0 +1,25 @@
+# 使用Node.js官方镜像作为基础镜像
+FROM node:20-alpine
+
+# 设置工作目录
+WORKDIR /app
+
+# 安装pnpm
+RUN npm install -g pnpm
+
+# 复制backend-mock目录
+COPY apps/backend-mock ./apps/backend-mock
+COPY package.json pnpm-lock.yaml* ./
+
+# 安装依赖
+RUN pnpm install
+
+# 构建后端服务
+WORKDIR /app/apps/backend-mock
+RUN pnpm build
+
+# 暴露端口
+EXPOSE 5320
+
+# 启动后端服务
+CMD ["node", ".output/server/index.mjs"]
